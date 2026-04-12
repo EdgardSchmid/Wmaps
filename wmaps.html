@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Wmaps - Guerra Mundial</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+
+  <style>
+    /* VARIÁVEIS DE CORES E ESTILO PIXEL */
+    :root {
+      --bg-panel: #5D4F3B;
+      --bg-input: #F1EADA;
+      --bg-button: #CEC1A8;
+      --border-button: #B59E7D;
+      --pixel-border: 4px solid #332a1e;
+      --army-red: #e74c3c;
+      --navy-blue: #3498db;
+      --air-purple: #9b59b6;
+      --defense-green: #2ecc71;
+    }
+
+    * { box-sizing: border-box; }
+
+    body, html { 
+      margin: 0; padding: 0; height: 100%; width: 100%;
+      font-family: 'Press Start 2P', cursive; 
+      display: flex; overflow: hidden; background: #aad3df;
+    }
+
+    /* --- SIDEBAR ESQUERDA --- */
+    #sidebar {
+      width: 340px; min-width: 340px; height: 100vh;
+      background: var(--bg-panel);
+      display: flex; flex-direction: column; padding: 15px;
+      border-right: var(--pixel-border);
+      z-index: 2000; position: relative;
+    }
+
+    .logo-container { text-align: center; margin-bottom: 10px; }
+    .logo-container img { 
+      max-width: 200px; 
+      width: 100%;
+      image-rendering: pixelated; 
+    }
+
+    .menu-group { display: flex; flex-direction: column; gap: 8px; }
+
+    input[type="text"], input[type="number"], select {
+      background: var(--bg-input);
+      border: 3px solid #332a1e;
+      padding: 10px;
+      font-family: 'Press Start 2P', cursive;
+      font-size: 10px; outline: none; width: 100%;
+    }
+
+    button {
+      background: var(--bg-button);
+      border: 4px solid var(--border-button);
+      padding: 12px;
+      font-family: 'Press Start 2P', cursive;
+      font-size: 8px; cursor: pointer; color: #332a1e;
+      width: 100%; box-shadow: inset -2px -2px 0px rgba(0,0,0,0.1);
+      margin-bottom: 4px;
+      transition: all 0.1s;
+      position: relative;
+    }
+    button:active { transform: translateY(2px); box-shadow: none; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* --- STATUS HUD --- */
+    .status-container {
+      background: #332a1e;
+      border: 3px solid #7a7a7a;
+      padding: 10px;
+      margin-top: 5px;
+      color: #fff;
+      font-size: 8px;
+    }
+    .status-container.military {
+      background: #443a2c;
+      border-color: #f1c40f;
+    }
+    .status-title {
+      font-size: 7px; color: #ccc; border-bottom: 1px dashed #555;
+      padding-bottom: 5px; margin-bottom: 8px; text-align: center;
+    }
+    .status-line { display: flex; justify-content: space-between; margin-bottom: 6px; }
+    .status-val { color: #0f0; }
+    .status-hp { color: #ff4444; }
+    .lvl-val { color: #f1c40f; }
+
+    /* --- TOOLTIPS --- */
+    [data-tooltip] {
+      position: relative;
+      cursor: help;
+    }
+    [data-tooltip]:hover::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      bottom: 110%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #111;
+      border: 2px solid #f1c40f;
+      color: #fff;
+      padding: 10px;
+      font-size: 7px;
+      white-space: pre-line;
+      z-index: 9999;
+      pointer-events: none;
+      text-align: center;
+      line-height: 1.6;
+      width: max-content;
+      min-width: 200px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.8);
+    }
+
+    /* Seletor de Cor */
+    .color-container {
+      background: #AAA396;
+      border: 3px solid #332a1e;
+      padding: 10px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .rainbow-picker-wrapper {
+      width: 30px; height: 30px;
+      border-radius: 50%;
+      border: 2px solid #332a1e;
+      background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red);
+      position: relative; overflow: hidden; cursor: pointer;
+    }
+    #colorPicker {
+      position: absolute; top: -10px; left: -10px;
+      width: 50px; height: 50px; cursor: pointer; opacity: 0;
+    }
+
+    /* --- MAPA --- */
+    #map-container { flex-grow: 1; position: relative; height: 100vh; }
+    #map { width: 100%; height: 100%; background: #aad3df; }
+
+    /* --- RELATÓRIO RETRÁTIL --- */
+    #toggle-info {
+      position: absolute; right: -44px; top: 50%;
+      transform: translateY(-50%);
+      width: 40px; height: 60px;
+      background: var(--bg-panel); border: var(--pixel-border);
+      border-left: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      color: white; z-index: 2001;
+    }
+
+    #info-panel {
+      position: absolute; left: 340px; top: 0;
+      width: 420px; height: 100vh;
+      background: rgba(30, 25, 15, 0.98);
+      border-right: var(--pixel-border);
+      padding: 25px; transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      transform: translateX(-100%);
+      z-index: 1500; color: #fff;
+      box-shadow: 10px 0 20px rgba(0,0,0,0.5);
+    }
+    #info-panel.open { transform: translateX(0); }
+
+    .log-content {
+      margin-top: 20px; height: 85%; overflow-y: auto;
+      font-size: 9px; line-height: 1.8;
+      padding-right: 15px;
+    }
+
+    /* --- TELA DE VITÓRIA (CORRIGIDA) --- */
+    #victory-screen {
+      display: none;
+      position: fixed;
+      inset: 0; /* Ocupa tudo */
+      background: rgba(0,0,0,0.95);
+      z-index: 30000;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      text-align: center;
+      padding: 20px;
+    }
+    #victory-screen h1 {
+        font-size: 30px;
+        color: #f1c40f;
+        text-shadow: 4px 4px 0px #000;
+        margin-bottom: 20px;
+    }
+
+    /* MODAL DE PRIORIDADE */
+    #priority-modal {
+      display: none;
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: var(--bg-panel);
+      border: var(--pixel-border);
+      padding: 30px;
+      z-index: 10000;
+      width: 400px;
+      text-align: center;
+      box-shadow: 0 0 0 1000px rgba(0,0,0,0.8);
+    }
+
+    .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .triple-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+
+    .section-label {
+      font-size: 8px; color: #f1c40f; margin: 15px 0 5px 0;
+      text-align: center; display: block; text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    ::-webkit-scrollbar { width: 10px; }
+    ::-webkit-scrollbar-thumb { background: var(--bg-button); border: 3px solid #332a1e; }
+  </style>
+</head>
+<body>
+
+<!-- TELA DE VITÓRIA -->
+<div id="victory-screen">
+  <div style="border: 6px solid #f1c40f; padding: 40px; background: #222;">
+    <h1 id="winner-name">COMANDANTE VENCEU!</h1>
+    <p style="font-size: 10px; margin-bottom: 40px; line-height: 2;">A SOBERANIA NACIONAL FOI ALCANÇADA.<br>O MUNDO SE CURVA PERANTE SUA ESTRATÉGIA.</p>
+    <button onclick="location.reload()" style="width: 300px; font-size: 12px; background: #4caf50; color: white;">NOVA CAMPANHA</button>
+  </div>
+</div>
+
+<!-- SIDEBAR ESQUERDA -->
+<div id="sidebar">
+  <div class="logo-container">
+    <img src="Wmapslogo.png" alt="WMAPS" onerror="this.style.display='none'; this.after('WMAPS')">
+  </div>
+
+  <!-- SETUP LOBBY -->
+  <div id="menu-setup" class="menu-group">
+    <label style="font-size: 8px; color: #fff;">IDENTIFICAÇÃO:</label>
+    <input id="player-name" type="text" placeholder="NOME DO LÍDER..." maxlength="12" />
+    <input id="search" type="text" placeholder="BUSCAR PAÍS..." />
+    <div class="action-grid">
+      <button onclick="searchLocation()">LOCALIZAR</button>
+      <button onclick="randomLocation()">ALEATÓRIO</button>
+    </div>
+
+    <div class="color-container">
+      <span style="font-size: 8px; color: #332a1e;">BANDEIRA:</span>
+      <div class="rainbow-picker-wrapper" id="rainbow-circle">
+        <input type="color" id="colorPicker" value="#ffff00" oninput="document.getElementById('rainbow-circle').style.background = this.value">
+      </div>
+    </div>
+
+    <div style="margin-top:10px; text-align: center;">
+      <div id="online-count" style="font-size: 9px; color: #0f0; background: #000; padding: 5px; border: 2px solid #333;">CONECTANDO...</div>
+    </div>
+
+    <button onclick="openPriorityModal()" id="btn-ready" style="background: #4caf50; color: white; margin-top: 10px; font-size: 10px; height: 60px;">CONFIRMAR MOBILIZAÇÃO</button>
+  </div>
+
+  <!-- INTERFACE IN-GAME -->
+  <div id="menu-game" class="menu-group" style="display:none; overflow-y: auto; padding-right: 5px;">
+    
+    <!-- STATUS -->
+    <div class="status-container">
+      <div class="status-title">STATUS DA NAÇÃO</div>
+      <div class="status-line" data-tooltip="Integridade Total.&#10;Zero = Derrota.">
+        <span>VIDA:</span><span id="stat-health" class="status-hp">100</span>
+      </div>
+      <div class="status-line" data-tooltip="Recurso para ações.&#10;Ganha +10/turno.">
+        <span>TROPAS:</span><span id="stat-troops" class="status-val">60</span>
+      </div>
+      <div id="spec-tag" style="display:none; color:#ffb700; text-align:center; font-size:7px; margin-top:5px;">[ MODO OBSERVADOR ]</div>
+    </div>
+
+    <!-- BUILDS -->
+    <div class="status-container" style="border-color: #95a5a6;">
+      <div class="status-title" style="color: #95a5a6;">ATRIBUTOS DE BUILD</div>
+      <div class="status-line" data-tooltip="Aumenta dano do Exército.">
+        <span>FORÇA:</span><span id="stat-force" class="status-val">15</span>
+      </div>
+      <div class="status-line" data-tooltip="Melhora defesa da Marinha.">
+        <span>RESISTÊNCIA:</span><span id="stat-resist" class="status-val">10</span>
+      </div>
+      <div class="status-line" data-tooltip="Crítico, Esquiva e Prioridade.">
+        <span>VELOCIDADE:</span><span id="stat-speed" class="status-val">5</span>
+      </div>
+    </div>
+
+    <!-- MILITAR -->
+    <div class="status-container military">
+      <div class="status-title" style="color: #f1c40f;">NÍVEL DAS FORÇAS</div>
+      <div class="status-line"><span>EXÉRCITO:</span><span id="lvl-ex" class="lvl-val">LVL 1</span></div>
+      <div class="status-line"><span>MARINHA:</span><span id="lvl-mar" class="lvl-val">LVL 1</span></div>
+      <div class="status-line"><span>AÉREA:</span><span id="lvl-aer" class="lvl-val">LVL 1</span></div>
+    </div>
+
+    <label style="font-size: 8px; color: #fff; margin-top: 10px;">DEFINIR ALVO:</label>
+    <select id="target-select"></select>
+
+    <!-- ATAQUES -->
+    <span class="section-label">Comandos de Ataque</span>
+    <div class="triple-grid">
+      <button onclick="sendAction('ataque', 'ex')" style="background:var(--army-red); color:white;" data-tooltip="ATAQUE EXÉRCITO&#10;Custo: 30 Tropas&#10;Dano Massivo.&#10;Passiva: Dano acumula se atacar turnos seguidos.">ATK EX</button>
+      <button onclick="sendAction('ataque', 'mar')" style="background:var(--navy-blue); color:white;" data-tooltip="ATAQUE MARINHA&#10;Custo: 12 Tropas&#10;Dano 75%.&#10;Passiva: +5 Defesa fixa no próximo turno.">ATK MAR</button>
+      <button onclick="sendAction('ataque', 'aer')" style="background:var(--air-purple); color:white;" data-tooltip="ATAQUE AÉREO&#10;Custo: 25 Tropas&#10;Dano Médio.&#10;Passiva: Chance de Crítico baseada em Velocidade.">ATK AER</button>
+    </div>
+
+    <!-- DEFESAS -->
+    <span class="section-label">Protocolos de Defesa</span>
+    <div class="triple-grid">
+      <button onclick="sendAction('defesa', 'ex')" style="background:var(--army-red); color:white;" data-tooltip="DEFESA EXÉRCITO&#10;PUNIÇÃO: Inimigo perde 10 tropas extras se te atacar.">DEF EX</button>
+      <button onclick="sendAction('defesa', 'mar')" style="background:var(--navy-blue); color:white;" data-tooltip="DEFESA MARINHA&#10;ESTÁVEL: Alta mitigação.&#10;3x seguidas = +15 HP.">DEF MAR</button>
+      <button onclick="sendAction('defesa', 'aer')" style="background:var(--air-purple); color:white;" data-tooltip="DEFESA AÉREA&#10;RISCO: Chance de esquiva total. Se falhar, toma 1.5x dano.">DEF AER</button>
+    </div>
+
+    <!-- LOGÍSTICA -->
+    <span class="section-label">Desenvolvimento</span>
+    <button onclick="sendAction('preparacao', 'recrutar')" style="background: #d35400; color: #fff; font-size: 9px;" data-tooltip="Ganha Tropas.&#10;RPS: Se o alvo defender, chance de +1 em todos os atributos.">RECRUTAR TROPAS</button>
+    
+    <div class="triple-grid">
+      <button onclick="sendAction('preparacao', 'ex')" style="font-size: 7px;">UP EX</button>
+      <button onclick="sendAction('preparacao', 'mar')" style="font-size: 7px;">UP MAR</button>
+      <button onclick="sendAction('preparacao', 'aer')" style="font-size: 7px;">UP AER</button>
+    </div>
+  </div>
+
+  <button onclick="location.reload()" style="margin-top: auto; background: #444; font-size: 7px; height: 35px;">RECONECTAR</button>
+  <div id="toggle-info" onclick="toggleInfo()">▶</div>
+</div>
+
+<!-- LOG DE MISSÃO -->
+<div id="info-panel">
+  <h3 style="font-size: 11px; border-bottom: 2px solid #fff; padding-bottom: 10px; color: #f1c40f; text-align: center;">RELATÓRIO DE MISSÃO</h3>
+  <div class="log-content" id="log"></div>
+</div>
+
+<!-- DOUTRINAS -->
+<div id="priority-modal">
+  <h3 style="font-size: 10px; color: #fff; margin-bottom: 20px;">ESCOLHA SUA DOUTRINA:</h3>
+  
+  <div data-tooltip="+60 Tropas Iniciais.&#10;Ganha muito mais tropas ao Recrutar.">
+    <button onclick="confirmReady('populacao')" style="margin-bottom:12px; background:#e67e22; color:#fff; height: 50px;">POPULAÇÃO (EXPANSÃO)</button>
+  </div>
+  
+  <div data-tooltip="Velocidade inicial extra.&#10;A cada 3 turnos: +1 em todos os atributos.">
+    <button onclick="confirmReady('industria')" style="margin-bottom:12px; background:#7f8c8d; color:#fff; height: 50px;">INDÚSTRIA (TECNOLOGIA)</button>
+  </div>
+  
+  <div data-tooltip="Vida Máxima: 140.&#10;Resistência Base: +5.">
+    <button onclick="confirmReady('suprimentos')" style="margin-bottom:12px; background:#27ae60; color:#fff; height: 50px;">LOGÍSTICA (RESISTÊNCIA)</button>
+  </div>
+</div>
+
+<!-- MAPA -->
+<div id="map-container">
+  <div id="map"></div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+  const socket = io();
+  const map = L.map('map', { zoomControl: false, minZoom: 2 }).setView([20, 0], 2);
+  
+  // MAPA TRADICIONAL (CLARO E TÁTICO)
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+  let playerMarkers = {};
+  let myId = null;
+  let infoOpen = false;
+  let myCountryData = null;
+  let isEliminated = false;
+
+  socket.on('connect', () => { myId = socket.id; });
+
+  function log(msg, color = "#fff") {
+    const el = document.getElementById('log');
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    el.innerHTML += `<div style="color:${color}; margin-bottom:12px; border-bottom: 1px solid #333; padding-bottom: 5px;">
+      <span style="color:#666; font-size:7px;">[${time}]</span><br>> ${msg}
+    </div>`;
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function toggleInfo(force = null) {
+    if (force !== null) infoOpen = force;
+    else infoOpen = !infoOpen;
+    document.getElementById('info-panel').classList.toggle('open', infoOpen);
+    document.getElementById('toggle-info').innerText = infoOpen ? '◀' : '▶';
+  }
+
+  // --- BUSCA ---
+  async function searchLocation() {
+    const query = document.getElementById('search').value.trim();
+    if (!query) return;
+    try {
+      const res = await fetch(`https://restcountries.com/v3.1/translation/${query}`);
+      const data = await res.json();
+      if (data && data.length > 0) {
+        setLobbySelection(data[0].latlng[0], data[0].latlng[1], data[0].translations.por.common);
+      }
+    } catch(e) { alert("Erro ao localizar país."); }
+  }
+
+  async function randomLocation() {
+    const res = await fetch("https://restcountries.com/v3.1/all?fields=latlng,translations");
+    const countries = await res.json();
+    const c = countries[Math.floor(Math.random() * countries.length)];
+    setLobbySelection(c.latlng[0], c.latlng[1], c.translations.por.common);
+  }
+
+  function setLobbySelection(lat, lng, name) {
+    myCountryData = { lat, lng, name };
+    map.flyTo([lat, lng], 4);
+    socket.emit('update_lobby', {
+        country: name, lat, lng, 
+        color: document.getElementById('colorPicker').value
+    });
+  }
+
+  function openPriorityModal() {
+    if (!myCountryData) return alert("Selecione um país!");
+    if (!document.getElementById('player-name').value) return alert("Digite seu nome!");
+    document.getElementById('priority-modal').style.display = 'block';
+  }
+
+  function confirmReady(priority) {
+    socket.emit('set_ready', {
+        name: document.getElementById('player-name').value,
+        priority: priority
+    });
+    document.getElementById('priority-modal').style.display = 'none';
+    document.getElementById('btn-ready').innerText = "MOBILIZADO...";
+    document.getElementById('btn-ready').disabled = true;
+  }
+
+  // --- EVENTOS SOCKET ---
+  socket.on('sync_players', (players) => {
+    const list = Object.values(players).filter(p => p.country);
+    document.getElementById('online-count').innerText = `${list.filter(p=>p.ready).length}/${list.length} PRONTOS`;
+
+    for (let id in playerMarkers) map.removeLayer(playerMarkers[id]);
+    playerMarkers = {};
+
+    list.forEach(p => {
+        const isMe = (p.id === myId);
+        playerMarkers[p.id] = L.circle([p.lat, p.lng], {
+            radius: isMe ? 550000 : 400000,
+            color: p.color,
+            weight: isMe ? 8 : 4,
+            fillOpacity: p.health > 0 ? 0.5 : 0.1
+        }).addTo(map);
+    });
+  });
+
+  socket.on('start_game', (players) => {
+    document.getElementById('menu-setup').style.display = 'none';
+    document.getElementById('menu-game').style.display = 'block';
+    updateHUD(players[myId]);
+    updateTargetList(players);
+    log("A GUERRA COMEÇOU. QUE A SORTE ESTEJA COM VOCÊ.", "#ff0000");
+    toggleInfo(true);
+  });
+
+  socket.on('turn_results', (data) => {
+    updateHUD(data.players[myId]);
+    updateTargetList(data.players);
+    data.reports.forEach(r => log(r.msg, r.color));
+    
+    document.getElementById('menu-game').style.opacity = "1";
+    document.getElementById('menu-game').style.pointerEvents = "all";
+  });
+
+  socket.on('game_over', (winner) => {
+    document.getElementById('victory-screen').style.display = 'flex';
+    document.getElementById('winner-name').innerText = `${winner.name.toUpperCase()} VENCEU!`;
+  });
+
+  socket.on('log_msg', (data) => log(data.msg, data.color));
+
+  // --- ACÕES ---
+  function sendAction(type, sub = null) {
+    const targetId = document.getElementById('target-select').value;
+    if (type === 'ataque' && !targetId) return alert("Escolha um alvo!");
+
+    socket.emit('submit_action', { action: type, targetId, subAction: sub });
+    document.getElementById('menu-game').style.opacity = "0.5";
+    document.getElementById('menu-game').style.pointerEvents = "none";
+    log(`ORDEM DE ${type.toUpperCase()} (${sub?sub.toUpperCase():'GERAL'}) ENVIADA.`);
+  }
+
+  function updateHUD(p) {
+    if (!p) return;
+    document.getElementById('stat-health').innerText = `${Math.ceil(p.health)} / ${p.hpMax}`;
+    document.getElementById('stat-troops').innerText = Math.floor(p.troops);
+    document.getElementById('stat-force').innerText = p.force;
+    document.getElementById('stat-resist').innerText = p.resist;
+    document.getElementById('stat-speed').innerText = p.speed;
+    document.getElementById('lvl-ex').innerText = `LVL ${p.lvlEx}`;
+    document.getElementById('lvl-mar').innerText = `LVL ${p.lvlMar}`;
+    document.getElementById('lvl-aer').innerText = `LVL ${p.lvlAer}`;
+
+    if (p.health <= 0 && !isEliminated) {
+        isEliminated = true;
+        document.getElementById('spec-tag').style.display = 'block';
+        document.getElementById('menu-game').style.opacity = "0.5";
+        document.getElementById('menu-game').style.pointerEvents = "none";
+        log("SUA NAÇÃO CAIU. VOCÊ É AGORA UM ESPECTADOR.", "#ff4444");
+    }
+  }
+
+  function updateTargetList(players) {
+    const sel = document.getElementById('target-select');
+    sel.innerHTML = "";
+    for (let id in players) {
+        if (id !== myId && players[id].health > 0) {
+            let opt = document.createElement('option');
+            opt.value = id;
+            opt.innerText = `${players[id].country} (${players[id].name})`;
+            sel.appendChild(opt);
+        }
+    }
+  }
+
+  window.onload = () => { log("BEM-VINDO AO WMAPS COMMAND."); };
+</script>
+</body>
+</html>
