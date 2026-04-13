@@ -149,11 +149,11 @@ function processTurn() {
         
         if (p.priority === 'industria') {
         // 2. Bônus fixo (Ajustado para ignorar o turno 0 e focar no 3, 6, 9...)
-        if (turnCount > 0 && turnCount % 3 === 0) {
+        if (turnCount > 0 && turnCount % 4 === 0) {
             p.force += 2; 
             p.resist += 2; 
             p.speed += 5;
-            reports.push({ msg: `[${p.country}] Plano trienal industrial concluído: +Atributos!`, color: p.color });
+            reports.push({ msg: `[${p.country}] Plano Quadrienal industrial concluído: +Atributos!`, color: p.color });
         }
     }
 });
@@ -173,7 +173,7 @@ function processTurn() {
             }
 
             if (p.subAction === 'recrutar') {
-                // NERF: 20 padrão, 30 se tiver traço de População
+                // NERF: 20 padrão, 35 se tiver traço de População
                 let gain = (p.priority === 'populacao') ? 35 : 20;
                 p.troops += gain;
                 let cura = (p.priority === 'populacao') ? 5 : 0;
@@ -292,8 +292,9 @@ function processTurn() {
         reports.push({ msg: `[${target.country}] desviou do ataque de [${p.country}]!`, color: target.color });
     } else {
         // Cálculo final
-        let danoFinal = danoBase - (mitigacao * penetracaoDefesa);
-        danoFinal = danoFinal * bonusDano;
+        let resultadoBruto = danoBase - (mitigacao * penetracaoDefesa);
+        let baseSegura = Math.max(5, resultadoBruto);
+        let danoFinal = baseSegura * bonusDano;
         danoFinal = Math.max(5, Math.floor(danoFinal));
 
         target.health -= danoFinal;
