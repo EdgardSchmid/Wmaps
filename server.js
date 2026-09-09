@@ -44,7 +44,7 @@ io.on('connection', (socket) => {
         consecutiveEx: 0,   
         consecutiveMarDef: 0, 
         marinaResistBuff: 0, // Buff atual no turno
-        nextMarinaResistBuff: 0, // Buff que será aplicado no PRÓXIMO turno (corrige o bug)
+        nextMarinaResistBuff: 0, // Buff que será aplicado no próximo turno
         
         ready: false,
         action: null,
@@ -312,7 +312,6 @@ function processTurn() {
     ids.forEach(id => {
         const p = players[id];
         p.action = null;
-        // Removi o reset imediato da marinha daqui. Agora é gerido na Fase 1.
         
         if (p.health <= 0) {
             p.health = 0;
